@@ -1,0 +1,16 @@
+{
+  "name": "imprimir-etiquetas",
+  "version": "1.0.0",
+  "description": "App de etiquetas para Full Party",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [],
+  "author": "Wh0am1",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^40.8.0",
+    "electron-packager": "^17.1.2"
+  }
+}

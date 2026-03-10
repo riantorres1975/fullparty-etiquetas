@@ -1,0 +1,10 @@
+﻿node_modules/
+__pycache__/
+*.pyc
+env/
+venv/
+inventario.db
+dist/
+build/
+FullPartyEtiquetas-win32-x64/
+*.spec
