@@ -1,11 +1,41 @@
-// app.js
-
 const API = 'http://127.0.0.1:8000'; 
 
 window.onload = () => {
     loadConfig();
     fetchProducts();
+    setupEnterNavigation();
 };
+
+function setupEnterNavigation() {
+    const sku = document.getElementById('sku');
+    const name = document.getElementById('name');
+    const price = document.getElementById('price');
+
+    sku.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault(); 
+            if (sku.value.trim() === '') {
+                genSku(); 
+            } else {
+                name.focus();       
+            }
+        }
+    });
+
+    name.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            price.focus();      
+        }
+    });
+
+    price.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            saveProduct();      
+        }
+    });
+}
 
 function loadConfig() {
     const savedStoreName = localStorage.getItem('fp_storeName');
@@ -59,7 +89,6 @@ async function fetchProducts() {
         products.forEach(p => {
             const safeName = p.name.replace(/'/g, "\\'");
 
-            // CÓDIGO PARA PC
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-purple-50 cursor-pointer transition border-b border-gray-50';
             tr.onclick = () => loadForm(p.sku, p.name, p.price);
@@ -70,12 +99,12 @@ async function fetchProducts() {
                 <td class="p-4 flex justify-center gap-2">
                     <button onclick="event.stopPropagation(); loadForm('${p.sku}', '${safeName}', ${p.price})" class="bg-amber-50 border border-amber-200 text-amber-600 px-3 py-2 rounded-lg font-bold hover:bg-amber-100 transition" title="Editar">✏️</button>
                     <button onclick="event.stopPropagation(); printLabel('${p.sku}')" class="bg-teal-50 border border-teal-200 text-teal-600 px-4 py-2 rounded-lg font-bold hover:bg-teal-100 transition" title="Imprimir">🖨</button>
-                    <button onclick="event.stopPropagation(); deleteProduct('${p.sku}')" class="bg-red-50 border border-red-200 text-red-500 px-3 py-2 rounded-lg font-bold hover:bg-red-100 transition" title="Eliminar">🗑</button>
+                    
+                    <button onclick="event.stopPropagation(); confirmDelete('${p.sku}', this)" class="bg-red-50 border border-red-200 text-red-500 px-3 py-2 rounded-lg font-bold hover:bg-red-100 transition whitespace-nowrap min-w-[40px]" title="Eliminar">🗑</button>
                 </td>
             `;
             tbody.appendChild(tr);
 
-            // CÓDIGO PARA CELULAR
             const card = document.createElement('div');
             card.className = 'bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col gap-3 active:bg-gray-50 transition';
             card.innerHTML = `
@@ -89,7 +118,8 @@ async function fetchProducts() {
                 <div class="flex gap-2 mt-1 pt-3 border-t border-gray-100">
                     <button onclick="event.stopPropagation(); loadForm('${p.sku}', '${safeName}', ${p.price})" class="flex-1 bg-amber-50 border border-amber-200 text-amber-700 py-2 rounded-lg font-bold text-sm shadow-sm active:bg-amber-100">✏️ Editar</button>
                     <button onclick="event.stopPropagation(); printLabel('${p.sku}')" class="flex-1 bg-teal-50 border border-teal-200 text-teal-700 py-2 rounded-lg font-bold text-sm shadow-sm active:bg-teal-100">🖨 Imprimir</button>
-                    <button onclick="event.stopPropagation(); deleteProduct('${p.sku}')" class="flex-none bg-red-50 border border-red-200 text-red-500 px-4 py-2 rounded-lg font-bold text-sm shadow-sm active:bg-red-100">🗑</button>
+                    
+                    <button onclick="event.stopPropagation(); confirmDelete('${p.sku}', this)" class="flex-none bg-red-50 border border-red-200 text-red-500 px-4 py-2 rounded-lg font-bold text-sm shadow-sm active:bg-red-100 whitespace-nowrap">🗑</button>
                 </div>
             `;
             mobileList.appendChild(card);
@@ -107,11 +137,26 @@ function loadForm(sku, name, price) {
 }
 
 async function saveProduct() {
-    const sku = document.getElementById('sku').value;
-    const name = document.getElementById('name').value;
-    const price = document.getElementById('price').value;
+    const skuInput = document.getElementById('sku');
+    const nameInput = document.getElementById('name');
+    const priceInput = document.getElementById('price');
+    
+    let sku = skuInput.value.trim();
+    let name = nameInput.value.trim();
+    const price = priceInput.value;
 
-    if (!name || !price) return alert("Falta nombre o precio");
+    if (!name) {
+        nameInput.focus();
+        return;
+    }
+    if (!price) {
+        priceInput.focus();
+        return;
+    }
+
+    name = name.toLowerCase().split(' ').map(word => {
+        return word.charAt(0).toUpperCase() + word.slice(1);
+    }).join(' ');
 
     await fetch(`${API}/products/`, {
         method: 'POST',
@@ -119,18 +164,49 @@ async function saveProduct() {
         body: JSON.stringify({ sku, name, price: Number(price) })
     });
 
-    document.getElementById('sku').value = '';
-    document.getElementById('name').value = '';
-    document.getElementById('price').value = '';
+    skuInput.value = '';
+    nameInput.value = '';
+    priceInput.value = '';
+    
     fetchProducts();
+    skuInput.focus();
 }
 
-async function deleteProduct(sku) {
-    if (confirm('¿Borrar este producto de forma permanente?')) {
-        await fetch(`${API}/products/${sku}`, { method: 'DELETE' });
-        fetchProducts();
+// --- MAGIA DEL BOTÓN DE ELIMINAR INTELIGENTE ---
+function confirmDelete(sku, btnElement) {
+    // Si ya le había dado clic una vez, lo borramos de verdad
+    if (btnElement.dataset.confirming === "true") {
+        executeDelete(sku);
+    } else {
+        // Es el primer clic: Transformamos el botón
+        const originalHtml = btnElement.innerHTML;
+        btnElement.innerHTML = '⚠️ Seguro?';
+        btnElement.dataset.confirming = "true";
+        
+        // Cambiamos colores a rojo peligro
+        btnElement.classList.remove('bg-red-50', 'text-red-500', 'border-red-200');
+        btnElement.classList.add('bg-red-600', 'text-white', 'border-red-600');
+        
+        // Le damos 3 segundos antes de que se arrepienta
+        setTimeout(() => {
+            // Verificamos que el botón no haya desaparecido de la pantalla
+            if(btnElement && btnElement.parentElement) {
+                btnElement.innerHTML = originalHtml;
+                btnElement.dataset.confirming = "false";
+                btnElement.classList.remove('bg-red-600', 'text-white', 'border-red-600');
+                btnElement.classList.add('bg-red-50', 'text-red-500', 'border-red-200');
+            }
+        }, 3000);
     }
 }
+
+async function executeDelete(sku) {
+    await fetch(`${API}/products/${sku}`, { method: 'DELETE' });
+    await fetchProducts();
+    // Forzamos el cursor para seguir trabajando
+    document.getElementById('sku').focus();
+}
+// ----------------------------------------------
 
 function printLabel(sku) {
     const showPrice = document.getElementById('showPrice').checked;
@@ -147,4 +223,6 @@ async function genSku() {
     const res = await fetch(`${API}/utils/sku/EAN13`);
     const data = await res.json();
     document.getElementById('sku').value = data.sku;
+    
+    document.getElementById('name').focus();
 }
